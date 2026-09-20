@@ -1,7 +1,7 @@
 # MARCO TEÓRICO 
 
 # Nombre del proyecto
-- **Ferroelectricos PYP**
+- **SUMILED SAS**
 ---
 
 # Integrantes del grupo

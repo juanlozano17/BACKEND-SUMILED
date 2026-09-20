@@ -1,5 +1,0 @@
-# Diagrama de despliegue del proyecto
-
-- [Diagrama de despliegue](https://drive.google.com/file/d/1IVT5-9Ks7HP0PGKHO_NpGPColQtlWBI1/view?usp=drive_link)
-
----

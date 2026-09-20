@@ -1,23 +1,35 @@
 import jwt from 'jsonwebtoken';
 
 export const verificarToken = (req, res, next) => {
-    // Buscamos el token en las cabeceras de la petición (Headers)
-    const token = req.headers['authorization'];
+    // 1. Buscamos el token en la Cookie (App Web) O en Headers (Postman)
+    let token = req.cookies?.token_sesion;
 
+    // Si no viene en cookie, revisamos si viene en Authorization Header
+    if (!token && req.headers['authorization']) {
+        const authHeader = req.headers['authorization'];
+        token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+    }
+
+    // 2. Si no hay token en ningún lado, denegamos el acceso
     if (!token) {
-        return res.status(403).json({ message: 'Acceso denegado. No se proporcionó un token de seguridad.' });
+        return res.status(403).json({ 
+            status: 'error', 
+            message: 'Acceso denegado. No se proporcionará un token de seguridad.' 
+        });
     }
 
     try {
-        // Quitamos la palabra 'Bearer ' si viene en el token de Postman
-        const tokenLimpio = token.startsWith('Bearer ') ? token.slice(7) : token;
+        // 3. Verificamos el token con la clave secreta
+        const verificado = jwt.verify(token, process.env.JWT_SECRET || 'FirmaSecretaSena2026');
         
-        // Verificamos el token con la palabra clave secreta de tu archivo .env
-        const verificado = jwt.verify(tokenLimpio, process.env.JWT_SECRET || 'FirmaSecretaSena2026');
+        // 4. Inyectamos los datos del usuario decodificados en la petición
+        req.usuario = verificado; 
         
-        req.usuario = verificado; // Guardamos los datos del usuario en la petición
-        next(); // ¡Todo bien! Le damos permiso de pasar al controlador
+        next(); // Permiso concedido
     } catch (error) {
-        res.status(401).json({ message: 'Token inválido o expirado.' });
+        return res.status(401).json({ 
+            status: 'error', 
+            message: 'Token inválido o expirado.' 
+        });
     }
 };

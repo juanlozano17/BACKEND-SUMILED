@@ -21,7 +21,7 @@ export const getProductoById = async (req, res) => {
         const { data, error } = await supabase
             .from('producto')
             .select('*')
-            .eq('idproducto', id) // Tu llave primaria exacta según el diagrama
+            .eq('idproducto', id)
             .single();
 
         if (error) return res.status(404).json({ error: 'Producto no encontrado' });
@@ -34,16 +34,16 @@ export const getProductoById = async (req, res) => {
 // 3. Crear un nuevo producto (POST)
 export const createProducto = async (req, res) => {
     try {
-        // Mapeamos los campos exactos del Schema Visualizer
-        const { idcategoria, nombre_producto, precio, descripcion, caracteristicas, imagenes, estado } = req.body;
+        // Eliminado 'estado' para evitar errores con Supabase
+        const { idcategoria, nombre_producto, precio, descripcion, caracteristicas, imagenes, stock } = req.body;
 
         const { data, error } = await supabase
             .from('producto')
-            .insert([{ idcategoria, nombre_producto, precio, descripcion, caracteristicas, imagenes, estado }])
+            .insert([{ idcategoria, nombre_producto, precio, descripcion, caracteristicas, imagenes, stock }])
             .select();
 
         if (error) throw error;
-        res.status(201).json(data);
+        res.status(201).json(data[0]); // Devolvemos el objeto creado directamente
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -53,11 +53,12 @@ export const createProducto = async (req, res) => {
 export const updateProducto = async (req, res) => {
     try {
         const { id } = req.params;
-        const { idcategoria, nombre_producto, precio, descripcion, caracteristicas, imagenes, estado } = req.body;
+        // Eliminado 'estado'
+        const { idcategoria, nombre_producto, precio, descripcion, caracteristicas, imagenes, stock } = req.body;
 
         const { data, error } = await supabase
             .from('producto')
-            .update({ idcategoria, nombre_producto, precio, descripcion, caracteristicas, imagenes, estado })
+            .update({ idcategoria, nombre_producto, precio, descripcion, caracteristicas, imagenes, stock })
             .eq('idproducto', id)
             .select();
 
