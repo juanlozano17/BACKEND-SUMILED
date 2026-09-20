@@ -12,6 +12,30 @@ const COOKIE_OPTIONS = {
     maxAge: 24 * 60 * 60 * 1000 // 24 horas
 };
 
+// Función auxiliar para subir la imagen a Supabase Storage
+const subirImagenPerfil = async (file, idUsuario) => {
+    const fileExt = file.originalname.split('.').pop();
+    const fileName = `avatar-${idUsuario}-${Date.now()}.${fileExt}`;
+    const filePath = `${fileName}`;
+
+    // 1. Subir la imagen al bucket 'profiles'
+    const { error: uploadError } = await supabase.storage
+        .from('profiles')
+        .upload(filePath, file.buffer, {
+            contentType: file.mimetype,
+            upsert: true
+        });
+
+    if (uploadError) throw new Error(`Error al subir la imagen: ${uploadError.message}`);
+
+    // 2. Obtener la URL pública
+    const { data: publicURLData } = supabase.storage
+        .from('profiles')
+        .getPublicUrl(filePath);
+
+    return publicURLData.publicUrl;
+};
+
 // 1. OBTENER TODOS LOS USUARIOS (GET) - SIN FILTRO PARA VER ACTIVOS E INACTIVOS
 export const getUsuarios = async (req, res) => {
     try {
@@ -43,7 +67,7 @@ export const getUsuarioById = async (req, res) => {
     }
 };
 
-// 3. REGISTRAR / CREAR NUEVO USUARIO (POST - Con Contraseña Encriptada)
+// 3. REGISTRAR / CREAR NUEVO USUARIO (POST - Con Contraseña Encriptada y opción de foto)
 export const createUsuario = async (req, res) => {
     const { id_rol, nombre, correo, contrasena } = req.body;
     try {
@@ -51,6 +75,7 @@ export const createUsuario = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const contrasenaEncriptada = await bcrypt.hash(contrasena, salt);
 
+        // Creamos primero el usuario para obtener su ID y poder asociar la foto si existe
         const { data, error } = await supabase
             .from('usuarios')
             .insert([{ 
@@ -64,7 +89,27 @@ export const createUsuario = async (req, res) => {
 
         if (error) throw error;
 
-        const nuevoUsuario = data[0];
+        let nuevoUsuario = data[0];
+
+        // Si el usuario subió una foto en el registro
+        if (req.file) {
+            try {
+                const fotoUrl = await subirImagenPerfil(req.file, nuevoUsuario.idusuario);
+                
+                // Actualizamos el usuario con la URL de la foto recién subida
+                const { data: updateData, error: updateError } = await supabase
+                    .from('usuarios')
+                    .update({ foto: fotoUrl }) // Asegúrate de que tu columna en BD se llame 'foto' (o 'avatar')
+                    .eq('idusuario', nuevoUsuario.idusuario)
+                    .select();
+
+                if (!updateError && updateData) {
+                    nuevoUsuario = updateData[0];
+                }
+            } catch (imgError) {
+                console.error("Error al procesar la foto de perfil en el registro:", imgError.message);
+            }
+        }
 
         // Registrar auditoría de creación
         await registrarAuditoria(req, `Creó el usuario ${correo} (ID: ${nuevoUsuario.idusuario})`);
@@ -98,6 +143,12 @@ export const updateUsuario = async (req, res) => {
     try {
         const datosActualizados = { nombre, correo, id_rol, estado };
         
+        // Si se subió una nueva foto al actualizar desde el panel de administración
+        if (req.file) {
+            const fotoUrl = await subirImagenPerfil(req.file, id);
+            datosActualizados.foto = fotoUrl; // Asegúrate de que tu columna en BD se llame 'foto'
+        }
+
         console.log("DATOS QUE SE ENVIARÁN A SUPABASE:", datosActualizados);
 
         // Si el usuario decide cambiar la contraseña en la actualización, también se encripta
@@ -202,24 +253,47 @@ export const loginUsuario = async (req, res) => {
     }
 };
 
-// 7. ACTUALIZAR MI PROPIO PERFIL (PUT - Usuario Logueado)
+// 7. ACTUALIZAR MI PROPIO PERFIL (PUT - Usuario Logueado con soporte para foto)
 export const updatePerfil = async (req, res) => {
+    console.log("--- 🚀 ENTRANDO A UPDATEPERFIL ---");
+    console.log("req.usuario decodificado:", req.usuario);
+
     const id_usuario = req.usuario?.id_usuario || req.usuario?.id;
+    console.log("ID de usuario extraído:", id_usuario);
+
+    if (!id_usuario) {
+        return res.status(401).json({ status: 'error', message: 'No autorizado: ID de usuario no encontrado en el token.' });
+    }
+
+    if (!req.body) {
+        return res.status(400).json({ status: 'error', message: 'No se recibieron los datos del formulario.' });
+    }
+
     const { nombre, apellidos, correo, telefono } = req.body;
 
     try {
+        const datosPerfilActualizado = { nombre, apellidos, correo, telefono };
+
+        if (req.file) {
+            console.log("Procesando subida de foto para el usuario:", id_usuario);
+            const fotoUrl = await subirImagenPerfil(req.file, id_usuario);
+            datosPerfilActualizado.foto = fotoUrl; 
+        }
+
+        console.log("Datos que se enviarán a Supabase para actualizar:", datosPerfilActualizado);
+
         const { data, error } = await supabase
             .from('usuarios')
-            .update({ nombre, apellidos, correo, telefono })
+            .update(datosPerfilActualizado)
             .eq('idusuario', id_usuario)
             .select()
             .single();
 
         if (error) {
+            console.error("❌ ERROR DIRECTO DE SUPABASE:", error);
             return res.status(400).json({ status: 'error', message: error.message });
         }
 
-        // Registrar auditoría de perfil propio
         await registrarAuditoria(req, `Actualizó su propio perfil (ID: ${id_usuario})`);
 
         res.status(200).json({
@@ -228,6 +302,7 @@ export const updatePerfil = async (req, res) => {
             usuario: data
         });
     } catch (error) {
+        console.error("❌ EXCEPCIÓN CAPTURADA EN CATCH:", error);
         res.status(500).json({ status: 'error', error: error.message });
     }
 };

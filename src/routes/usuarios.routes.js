@@ -10,16 +10,27 @@ import {
 } from '../controllers/usuarios.controller.js';
 
 import { verificarToken } from '../middlewares/auth.middleware.js';
+import upload from '../helpers/upload.helper.js'; // helper de multer para manejar las fotos
 
 const router = Router();
 
-// Rutas con el segmento /usuarios para que coincidan con app.use('/api', usuariosRoutes)
+// Rutas generales y específicas
 router.get('/usuarios', verificarToken, getUsuarios);
+
+// 1. RUTA DE PERFIL PROPIO (Debe ir obligatoriamente ANTES de /usuarios/:id)
+router.put('/usuarios/perfil', verificarToken, upload.single('foto'), updatePerfil);
+
+// Rutas con parámetros por ID
 router.get('/usuarios/:id', verificarToken, getUsuarioById);
-router.post('/usuarios', createUsuario);
+
+// upload.single('avatar') aquí para que acepte la foto en el registro
+router.post('/usuarios', upload.single('foto'), createUsuario);
+
 router.post('/usuarios/login', loginUsuario); 
-router.put('/usuarios/perfil', verificarToken, updatePerfil);
-router.put('/usuarios/:id', verificarToken, updateUsuario);
+
+// upload.single('avatar') aquí para que el admin pueda actualizar la foto de cualquier usuario
+router.put('/usuarios/:id', verificarToken, upload.single('foto'), updateUsuario);
+
 router.delete('/usuarios/:id', verificarToken, deleteUsuario);
 
 export default router;
