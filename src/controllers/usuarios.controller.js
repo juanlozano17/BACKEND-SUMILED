@@ -1,6 +1,7 @@
 import { supabase } from '../supabase.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { registrarAuditoria } from '../helpers/auditoria.helper.js';
 
 // Configuración global estandarizada para la Cookie
@@ -323,6 +324,92 @@ export const updatePerfil = async (req, res) => {
         });
     } catch (error) {
         console.error("❌ EXCEPCIÓN CAPTURADA EN CATCH:", error);
+        res.status(500).json({ status: 'error', error: error.message });
+    }
+};
+
+// 8. RECUPERAR CONTRASEÑA - ENVIAR TOKEN
+export const recuperarPassword = async (req, res) => {
+    const { correo } = req.body;
+
+    try {
+        const { data: usuario, error } = await supabase
+            .from('usuarios')
+            .select('*')
+            .eq('correo', correo)
+            .single();
+
+        if (error || !usuario) {
+            return res.status(404).json({ status: 'error', message: 'No se encontró una cuenta con este correo.' });
+        }
+
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiracion = new Date(Date.now() + 3600000); // 1 hora de vigencia
+
+        await supabase
+            .from('usuarios')
+            .update({ 
+                token_recuperacion: token, 
+                token_expiracion: expiracion.toISOString() 
+            })
+            .eq('idusuario', usuario.idusuario);
+
+        // Enlace impreso en la terminal de Node.js para pruebas locales
+        const enlace = `http://localhost:5173/actualizar-password?token=${token}`;
+        console.log("🔗 ENLACE DE RECUPERACIÓN:", enlace);
+
+        res.json({ 
+            status: 'success', 
+            mensaje: 'Se han generado las instrucciones de recuperación.' 
+        });
+
+    } catch (error) {
+        console.error("Error en recuperarPassword:", error);
+        res.status(500).json({ status: 'error', error: error.message });
+    }
+};
+
+// 9. ACTUALIZAR CONTRASEÑA USANDO EL TOKEN
+export const actualizarPassword = async (req, res) => {
+    const { token, nuevaPassword } = req.body;
+
+    try {
+        if (!token || !nuevaPassword) {
+            return res.status(400).json({ status: 'error', message: 'Faltan datos requeridos.' });
+        }
+
+        // Buscamos al usuario que coincida con el token y cuya fecha de expiración sea mayor a la actual
+        const { data: usuario, error } = await supabase
+            .from('usuarios')
+            .select('*')
+            .eq('token_recuperacion', token)
+            .gt('token_expiracion', new Date().toISOString())
+            .single();
+
+        if (error || !usuario) {
+            return res.status(400).json({ status: 'error', message: 'El enlace es inválido o ya ha expirado.' });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const passwordEncriptada = await bcrypt.hash(nuevaPassword, salt);
+
+        // Actualizamos la contraseña y limpiamos los campos de tokens
+        await supabase
+            .from('usuarios')
+            .update({ 
+                contrasena: passwordEncriptada, 
+                token_recuperacion: null, 
+                token_expiracion: null 
+            })
+            .eq('idusuario', usuario.idusuario);
+
+        res.json({ 
+            status: 'success', 
+            message: '¡Contraseña actualizada con éxito!' 
+        });
+
+    } catch (error) {
+        console.error("Error al actualizar contraseña:", error);
         res.status(500).json({ status: 'error', error: error.message });
     }
 };

@@ -6,7 +6,9 @@ import {
     updateUsuario, 
     deleteUsuario,
     loginUsuario,
-    updatePerfil 
+    updatePerfil,
+    recuperarPassword,     
+    actualizarPassword
 } from '../controllers/usuarios.controller.js';
 
 import { verificarToken } from '../middlewares/auth.middleware.js';
@@ -32,5 +34,9 @@ router.post('/usuarios/login', loginUsuario);
 router.put('/usuarios/:id', verificarToken, upload.single('foto'), updateUsuario);
 
 router.delete('/usuarios/:id', verificarToken, deleteUsuario);
+
+router.post('/usuarios/recuperar-password', recuperarPassword);
+
+router.post('/usuarios/actualizar-password', actualizarPassword);
 
 export default router;
