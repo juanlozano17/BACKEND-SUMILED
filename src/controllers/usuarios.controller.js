@@ -8,7 +8,7 @@ const COOKIE_OPTIONS = {
     httpOnly: true,
     secure: false,       // 'false' para desarrollo local (HTTP)
     sameSite: 'lax',     // Permite el envío entre puertos en localhost
-    path: '/',           // 👈 Garantiza disponibilidad en TODO el sitio
+    path: '/',           // Garantiza disponibilidad en TODO el sitio
     maxAge: 24 * 60 * 60 * 1000 // 24 horas
 };
 
@@ -99,7 +99,7 @@ export const createUsuario = async (req, res) => {
                 // Actualizamos el usuario con la URL de la foto recién subida
                 const { data: updateData, error: updateError } = await supabase
                     .from('usuarios')
-                    .update({ foto: fotoUrl }) // Asegúrate de que tu columna en BD se llame 'foto' (o 'avatar')
+                    .update({ foto: fotoUrl }) 
                     .eq('idusuario', nuevoUsuario.idusuario)
                     .select();
 
@@ -146,7 +146,7 @@ export const updateUsuario = async (req, res) => {
         // Si se subió una nueva foto al actualizar desde el panel de administración
         if (req.file) {
             const fotoUrl = await subirImagenPerfil(req.file, id);
-            datosActualizados.foto = fotoUrl; // Asegúrate de que tu columna en BD se llame 'foto'
+            datosActualizados.foto = fotoUrl; 
         }
 
         console.log("DATOS QUE SE ENVIARÁN A SUPABASE:", datosActualizados);
@@ -183,7 +183,6 @@ export const updateUsuario = async (req, res) => {
 export const deleteUsuario = async (req, res) => {
     const { id } = req.params;
     try {
-        // En lugar de .delete(), hacemos un .update() cambiando estado a false
         const { data, error } = await supabase
             .from('usuarios')
             .update({ estado: false })
@@ -253,7 +252,7 @@ export const loginUsuario = async (req, res) => {
     }
 };
 
-// 7. ACTUALIZAR MI PROPIO PERFIL (PUT - Usuario Logueado con soporte para foto)
+// 7. ACTUALIZAR MI PROPIO PERFIL (PUT - Usuario Logueado con soporte para foto y contraseñas)
 export const updatePerfil = async (req, res) => {
     console.log("--- 🚀 ENTRANDO A UPDATEPERFIL ---");
     console.log("req.usuario decodificado:", req.usuario);
@@ -269,10 +268,31 @@ export const updatePerfil = async (req, res) => {
         return res.status(400).json({ status: 'error', message: 'No se recibieron los datos del formulario.' });
     }
 
-    const { nombre, apellidos, correo, telefono } = req.body;
+    const { nombre, apellidos, correo, telefono, passwordActual, passwordNueva } = req.body;
 
     try {
         const datosPerfilActualizado = { nombre, apellidos, correo, telefono };
+
+        // Si el usuario decidió cambiar su contraseña en la edición de perfil
+        if (passwordActual && passwordNueva) {
+            const { data: usuarioBD, error: errorUser } = await supabase
+                .from('usuarios')
+                .select('contrasena')
+                .eq('idusuario', id_usuario)
+                .single();
+
+            if (errorUser || !usuarioBD) {
+                return res.status(404).json({ status: 'error', message: 'Usuario no encontrado en la base de datos.' });
+            }
+
+            const passwordValida = await bcrypt.compare(passwordActual, usuarioBD.contrasena);
+            if (!passwordValida) {
+                return res.status(400).json({ status: 'error', message: 'La contraseña actual es incorrecta.' });
+            }
+
+            const salt = await bcrypt.genSalt(10);
+            datosPerfilActualizado.contrasena = await bcrypt.hash(passwordNueva, salt);
+        }
 
         if (req.file) {
             console.log("Procesando subida de foto para el usuario:", id_usuario);

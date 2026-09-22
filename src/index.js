@@ -19,6 +19,8 @@ import detalleEnvioRoutes from './routes/detalle_envio.routes.js';
 import deseosRoutes from './routes/deseos.routes.js';
 import productoProveedorRoutes from './routes/producto_proveedor.routes.js';
 import auditoriaRoutes from './routes/auditoria.routes.js';
+import contactoRoutes from './routes/contacto.routes.js';
+import authRoutes from './routes/auth.routes.js';
 
 dotenv.config();
 
@@ -49,6 +51,8 @@ app.use('/api', detalleEnvioRoutes);
 app.use('/api', deseosRoutes);
 app.use('/api', productoProveedorRoutes);
 app.use('/api', auditoriaRoutes);
+app.use('/api', contactoRoutes);
+app.use('/api/auth', authRoutes);
 
 // Mensaje en consola
 app.listen(PORT, () => {
